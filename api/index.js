@@ -19,14 +19,14 @@ const handler = Waline();
 
 module.exports = async (req, res) => {
   if (req.url === '/debug') {
-    // List all POSTGRES_ and PG_ env vars
-    const pgVars = {};
-    for (const [k, v] of Object.entries(process.env)) {
-      if (k.startsWith('POSTGRES_') || k.startsWith('PG_')) {
-        pgVars[k] = k.includes('PASSWORD') ? '***' : (k.includes('URL') ? v.substring(0, 50) + '...' : v);
-      }
-    }
-    return res.status(200).json(pgVars);
+    return res.status(200).json({
+      host: process.env.POSTGRES_HOST,
+      port: process.env.POSTGRES_PORT,
+      user: process.env.POSTGRES_USER,
+      db: process.env.POSTGRES_DATABASE,
+      ssl: process.env.POSTGRES_SSL,
+      non_pooling_url_host: process.env.POSTGRES_URL_NON_POOLING ? new URL(process.env.POSTGRES_URL_NON_POOLING).hostname : 'N/A',
+    });
   }
   return handler(req, res);
 };
