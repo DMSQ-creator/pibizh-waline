@@ -1,10 +1,5 @@
 {
-  "functions": {
-    "api/index.js": {
-      "memory": 1024
-    },
-    "api/admin/index.js": {
-      "memory": 512
-    }
-  }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api" }
+  ]
 }
