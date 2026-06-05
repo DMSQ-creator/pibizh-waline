@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "regions": ["hkg1"],
+  "env": {
+    "SITE_URL": "https://pibizh.com",
+    "SECURE_DOMAINS": "pibizh.com"
+  }
+}
