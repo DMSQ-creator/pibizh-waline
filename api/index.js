@@ -1,5 +1,3 @@
-// Map Vercel Neon Postgres env vars BEFORE requiring Waline
-// Prefer NON_POOLING URL for DDL (table creation) support
 const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
 
 if (connectionString && !process.env.POSTGRES_DATABASE) {
@@ -21,13 +19,14 @@ const handler = Waline();
 
 module.exports = async (req, res) => {
   if (req.url === '/debug') {
-    return res.status(200).json({
-      using: connectionString === process.env.POSTGRES_URL_NON_POOLING ? 'NON_POOLING' : 'POOLING',
-      POSTGRES_DATABASE: process.env.POSTGRES_DATABASE || 'NOT SET',
-      POSTGRES_HOST: process.env.POSTGRES_HOST || 'NOT SET',
-      POSTGRES_PORT: process.env.POSTGRES_PORT || 'NOT SET',
-      POSTGRES_USER: process.env.POSTGRES_USER || 'NOT SET',
-    });
+    // List all POSTGRES_ and PG_ env vars
+    const pgVars = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k.startsWith('POSTGRES_') || k.startsWith('PG_')) {
+        pgVars[k] = k.includes('PASSWORD') ? '***' : (k.includes('URL') ? v.substring(0, 50) + '...' : v);
+      }
+    }
+    return res.status(200).json(pgVars);
   }
   return handler(req, res);
 };
