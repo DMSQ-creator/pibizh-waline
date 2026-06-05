@@ -14,9 +14,6 @@ if (connectionString) {
   }
 }
 
-// Auto-approve comments (don't mark as spam by default)
-process.env.AUDIT_PENDING = 'false';
-
 const Waline = require('@waline/vercel');
 const handler = Waline();
 
@@ -25,10 +22,11 @@ module.exports = async (req, res) => {
     const { Pool } = require('pg');
     const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
     try {
-      // Approve all existing comments
-      await pool.query("UPDATE wl_comment SET status = 'approved' WHERE status = 'spam'");
-      const result = await pool.query('SELECT count(*) as cnt FROM wl_comment');
-      return res.status(200).json({ ok: true, approved: true, totalComments: result.rows[0].cnt });
+      // Check and fix all comments
+      const check = await pool.query('SELECT id, nick, status FROM wl_comment');
+      await pool.query("UPDATE wl_comment SET status = 'approved'");
+      const result = await pool.query('SELECT id, nick, status FROM wl_comment');
+      return res.status(200).json({ before: check.rows, after: result.rows });
     } catch(e) {
       return res.status(500).json({ error: e.message });
     } finally {
