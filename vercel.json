@@ -1,7 +1,8 @@
 {
-  "regions": ["sin1"],
-  "env": {
-    "SECURE_DOMAINS": "pibizh.com",
-    "SITE_URL": "https://pibizh.com"
+  "functions": {
+    "api/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
   }
 }

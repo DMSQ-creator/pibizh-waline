@@ -1,3 +1,3 @@
-const Application = require('@waline/vercel');
+const Waline = require('@waline/vercel');
 
-module.exports = Application();
+module.exports = Waline();
