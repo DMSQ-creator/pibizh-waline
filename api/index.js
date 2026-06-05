@@ -1,6 +1,7 @@
+// Always recalculate from NON_POOLING URL (skip pooler for DDL)
 const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
 
-if (connectionString && !process.env.POSTGRES_DATABASE) {
+if (connectionString) {
   try {
     const url = new URL(connectionString);
     process.env.POSTGRES_HOST = url.hostname;
@@ -21,11 +22,8 @@ module.exports = async (req, res) => {
   if (req.url === '/debug') {
     return res.status(200).json({
       host: process.env.POSTGRES_HOST,
-      port: process.env.POSTGRES_PORT,
-      user: process.env.POSTGRES_USER,
       db: process.env.POSTGRES_DATABASE,
       ssl: process.env.POSTGRES_SSL,
-      non_pooling_url_host: process.env.POSTGRES_URL_NON_POOLING ? new URL(process.env.POSTGRES_URL_NON_POOLING).hostname : 'N/A',
     });
   }
   return handler(req, res);
