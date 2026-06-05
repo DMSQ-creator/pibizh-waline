@@ -1,6 +1,5 @@
-const Waline = require('@waline/vercel');
-
-// Map Vercel Neon Postgres env vars to Waline's expected format
+// Map Vercel Neon Postgres env vars BEFORE requiring Waline
+// (ThinkJS reads env vars at require time, not at call time)
 if (process.env.POSTGRES_URL && !process.env.POSTGRES_DATABASE) {
   try {
     const url = new URL(process.env.POSTGRES_URL);
@@ -9,11 +8,13 @@ if (process.env.POSTGRES_URL && !process.env.POSTGRES_DATABASE) {
     process.env.POSTGRES_USER = url.username;
     process.env.POSTGRES_PASSWORD = decodeURIComponent(url.password);
     process.env.POSTGRES_DATABASE = url.pathname.slice(1);
-    // Enable SSL for Neon connections
     process.env.POSTGRES_SSL = 'true';
   } catch(e) {
     console.error('Failed to parse POSTGRES_URL:', e.message);
   }
 }
+
+// NOW require Waline - it will see the mapped env vars
+const Waline = require('@waline/vercel');
 
 module.exports = Waline();
