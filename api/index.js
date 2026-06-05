@@ -15,23 +15,4 @@ if (connectionString) {
 }
 
 const Waline = require('@waline/vercel');
-const handler = Waline();
-
-module.exports = async (req, res) => {
-  if (req.url === '/fix') {
-    const { Pool } = require('pg');
-    const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
-    try {
-      // Check and fix all comments
-      const check = await pool.query('SELECT id, nick, status FROM wl_comment');
-      await pool.query("UPDATE wl_comment SET status = 'approved'");
-      const result = await pool.query('SELECT id, nick, status FROM wl_comment');
-      return res.status(200).json({ before: check.rows, after: result.rows });
-    } catch(e) {
-      return res.status(500).json({ error: e.message });
-    } finally {
-      await pool.end();
-    }
-  }
-  return handler(req, res);
-};
+module.exports = Waline();
