@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
           ip VARCHAR(128),
           ua VARCHAR(1024),
           status VARCHAR(64),
-          like INTEGER,
+          "like" INTEGER,
           dislike INTEGER,
           pid INTEGER,
           rid INTEGER,
@@ -55,7 +55,9 @@ module.exports = async (req, res) => {
           reaction6 INTEGER,
           reaction7 INTEGER,
           reaction8 INTEGER
-        );
+        )
+      `);
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS wl_users (
           id SERIAL PRIMARY KEY,
           display_name VARCHAR(255),
@@ -66,10 +68,10 @@ module.exports = async (req, res) => {
           url VARCHAR(1024),
           created_at TIMESTAMPTZ,
           updated_at TIMESTAMPTZ
-        );
-        CREATE INDEX IF NOT EXISTS idx_wl_comment_url ON wl_comment(url);
-        CREATE INDEX IF NOT EXISTS idx_wl_comment_pid ON wl_comment(pid);
+        )
       `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_wl_comment_url ON wl_comment(url)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_wl_comment_pid ON wl_comment(pid)`);
       return res.status(200).json({ ok: true, message: 'Tables created!' });
     } catch(e) {
       return res.status(500).json({ error: e.message });
