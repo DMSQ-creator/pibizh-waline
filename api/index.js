@@ -20,23 +20,39 @@ const handler = Waline();
 module.exports = async (req, res) => {
   if (req.url === '/setup-admin') {
     const { Pool } = require('pg');
-    const { PasswordHash } = require('phpass');
     const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
     try {
-      const pwdHash = new PasswordHash();
+      // Use Waline's own PasswordHash from phpass
+      let pwdHash;
+      try {
+        const { PasswordHash } = require('phpass');
+        pwdHash = new PasswordHash();
+      } catch(e) {
+        // Fallback: try from @waline/vercel's node_modules
+        const { PasswordHash } = require('@waline/vercel/node_modules/phpass');
+        pwdHash = new PasswordHash();
+      }
+      
       const password = 'pibizh2026';
       const hashed = pwdHash.hashPassword(password);
       
-      await pool.query(`
-        INSERT INTO wl_users (display_name, email, password, type, createdat, updatedat)
-        VALUES ($1, $2, $3, $4, NOW(), NOW())
-        ON CONFLICT DO NOTHING
-      `, ['Andy', 'andy@pibizh.com', hashed, 'administrator']);
+      // Check if user exists first
+      const existing = await pool.query("SELECT id FROM wl_users WHERE email = 'andy@pibizh.com'");
+      if (existing.rows.length > 0) {
+        // Update existing user
+        await pool.query("UPDATE wl_users SET password = $1, type = 'administrator' WHERE email = 'andy@pibizh.com'", [hashed]);
+      } else {
+        // Create new user
+        await pool.query(`
+          INSERT INTO wl_users (display_name, email, password, type, createdat, updatedat)
+          VALUES ($1, $2, $3, $4, NOW(), NOW())
+        `, ['Andy', 'andy@pibizh.com', hashed, 'administrator']);
+      }
       
       const check = await pool.query("SELECT id, display_name, email, type FROM wl_users WHERE email = 'andy@pibizh.com'");
       return res.status(200).json({ ok: true, user: check.rows[0], password: password });
     } catch(e) {
-      return res.status(500).json({ error: e.message });
+      return res.status(500).json({ error: e.message, stack: e.stack?.slice(0,300) });
     } finally {
       await pool.end();
     }

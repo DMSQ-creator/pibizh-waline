@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@waline/vercel": "1.40.3",
+    "@waline/vercel": "^1.40.3",
     "pg": "8.13.1"
   }
 }
