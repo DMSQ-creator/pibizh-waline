@@ -4,7 +4,7 @@ module.exports = async (req, res) => {
   const rawKey = req.query?.s || req.headers['x-auth'] || '';
   const key = Buffer.from(rawKey, 'base64').toString('utf8');
   if (key !== 'fix-admin-2026') {
-    return res.status(403).json({ error: 'Forbidden', got: key.substring(0,3) });
+    return res.status(403).json({ error: 'Forbidden' });
   }
 
   const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
@@ -12,22 +12,15 @@ module.exports = async (req, res) => {
   
   try {
     await client.connect();
-    const { rows: tables } = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
-    const counts = {};
-    for (const t of tables) {
-      try {
-        const { rows } = await client.query(`SELECT count(*) as cnt FROM "${t.tablename}"`);
-        counts[t.tablename] = parseInt(rows[0].cnt);
-      } catch(e) {}
-    }
-    let comments = [];
-    try {
-      const { rows } = await client.query('SELECT id, nick, url, path, createdat FROM wl_comment ORDER BY createdat DESC LIMIT 5');
-      comments = rows;
-    } catch(e) { comments = e.message; }
+    
+    // Get column names first
+    const { rows: cols } = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'wl_comment'");
+    
+    // Get all comments
+    const { rows: comments } = await client.query('SELECT * FROM wl_comment ORDER BY createdat DESC');
     
     await client.end();
-    return res.json({ tables: counts, recentComments: comments });
+    return res.json({ columns: cols.map(c => c.column_name), comments });
   } catch (err) {
     try { await client.end(); } catch(e) {}
     return res.status(500).json({ error: err.message });
