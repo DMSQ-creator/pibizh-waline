@@ -1,12 +1,10 @@
 const { Client } = require('pg');
 
 module.exports = async (req, res) => {
-  // Debug: check what we receive
-  const key = req.query?.key;
-  const expectedKey = 'fix-admin-2026';
-  
-  if (key !== expectedKey) {
-    return res.status(403).json({ error: 'Forbidden', debug: { receivedKey: key, expectedKey, queryKeys: Object.keys(req.query || {}) } });
+  // Accept key from query or body
+  const key = req.body?.secret || req.query?.s;
+  if (key !== 'fix-admin-2026') {
+    return res.status(403).json({ error: 'Forbidden', got: typeof key });
   }
 
   const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
