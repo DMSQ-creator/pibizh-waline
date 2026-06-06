@@ -16,39 +16,33 @@ module.exports = async (req, res) => {
   try {
     await client.connect();
 
-    // List all tables
-    const { rows: tables } = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+    // Get all users from wl_users
+    const { rows: users } = await client.query('SELECT * FROM wl_users');
     
-    let result = { tables: tables.map(t => t.tablename), users: [], updated: null };
+    // Fix the admin user with correct phpass password hash
+    const PHPass = require('phpass');
+    const hasher = new PHPass();
+    const hashedPassword = hasher.hashPassword('pibizh2026');
     
-    // Try each possible user table name
-    for (const table of ['Users', 'users', 'user', 'waline_users']) {
-      try {
-        const { rows } = await client.query(`SELECT * FROM "${table}" LIMIT 10`);
-        result.users = rows;
-        result.userTable = table;
-        
-        if (rows.length > 0) {
-          // Fix admin user
-          const PHPass = require('phpass');
-          const hasher = new PHPass();
-          const hashedPassword = hasher.hashPassword('pibizh2026');
-          
-          const updateResult = await client.query(
-            `UPDATE "${table}" SET type = 'administrator', password = $1 WHERE email = 'andy@pibizh.com' RETURNING "objectId", email, type, "display_name"`,
-            [hashedPassword]
-          );
-          result.updated = updateResult.rows;
-          result.passwordReset = updateResult.rowCount > 0;
-        }
-        break;
-      } catch(e) {
-        // Table doesn't exist, try next
-      }
-    }
+    // Update user type and password for andy@pibizh.com
+    const updateResult = await client.query(
+      `UPDATE wl_users SET type = 'administrator', password = $1 WHERE email = 'andy@pibizh.com' RETURNING "objectId", email, type, "display_name", "createdAt"`,
+      [hashedPassword]
+    );
 
     await client.end();
-    return res.status(200).json(result);
+
+    return res.status(200).json({
+      allUsers: users.map(u => ({ 
+        objectId: u.objectId, 
+        email: u.email, 
+        type: u.type, 
+        display_name: u.display_name,
+        createdAt: u.createdAt
+      })),
+      updated: updateResult.rows,
+      passwordReset: updateResult.rowCount > 0
+    });
   } catch (err) {
     try { await client.end(); } catch(e) {}
     return res.status(500).json({ error: err.message });
