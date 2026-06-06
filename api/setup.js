@@ -4,35 +4,31 @@ module.exports = async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  try {
-    // Try to access Waline's internal ORM
-    const Waline = require('@waline/vercel');
-    const app = Waline();
-    
-    // Create a fake context to access the model
-    // Actually, let me just make an HTTP request to the token endpoint from within Vercel
-    // using the internal URL
-    
-    const body = JSON.stringify({ email: 'andy@pibizh.com', password: 'pibizh2026' });
-    
-    // Use Vercel's internal fetch
-    const resp = await fetch('http://localhost:3000/api/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Origin': 'https://pibizh.com',
-      },
-      body
-    });
-    
-    const data = await resp.text();
-    
-    return res.json({ 
-      statusCode: resp.status,
-      response: data.substring(0, 500),
-      headers: Object.fromEntries(resp.headers.entries())
-    });
-  } catch(e) {
-    return res.status(500).json({ error: e.message, stack: e.stack?.substring(0, 500) });
+  // Check what index.js would set for POSTGRES_PASSWORD
+  const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
+  let parsedPassword = '(no conn string)';
+  let rawPassword = process.env.POSTGRES_PASSWORD || '(not set)';
+  
+  if (connectionString) {
+    try {
+      const url = new URL(connectionString);
+      const rawUrlPassword = url.password;
+      const hasPercent = rawUrlPassword.split("%").length > 1;
+      const unescapedPassword = hasPercent ? unescape(rawUrlPassword) : rawUrlPassword;
+      parsedPassword = `raw: ${rawUrlPassword.substring(0,10)}... | hasPercent: ${hasPercent} | unescaped: ${unescapedPassword.substring(0,10)}...`;
+    } catch(e) {
+      parsedPassword = 'ERROR: ' + e.message;
+    }
   }
+
+  // Check what Waline's config sees
+  const { POSTGRES_PASSWORD: envPw, PG_PASSWORD: pgPw } = process.env;
+  
+  return res.json({
+    connectionString: connectionString ? connectionString.substring(0, 50) + '...' : '(none)',
+    envPostgresPassword: rawPassword.substring(0, 15) + '...',
+    pgPassword: (pgPw || '(not set)').substring(0, 15) + '...',
+    parsedInfo: parsedPassword,
+    jwtToken: process.env.JWT_TOKEN ? 'SET (' + process.env.JWT_TOKEN.substring(0, 10) + '...)' : 'NOT SET'
+  });
 };
