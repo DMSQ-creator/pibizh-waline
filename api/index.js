@@ -14,7 +14,6 @@ if (connectionString) {
   }
 }
 
-// Auto-generate JWT_KEY if not set
 if (!process.env.JWT_KEY) {
   process.env.JWT_KEY = process.env.POSTGRES_PASSWORD || 'default-jwt-key-' + Date.now();
 }
@@ -25,4 +24,33 @@ if (process.env.SECURE_DOMAINS && !process.env.SECURE_DOMAINS.includes('vercel.a
 }
 
 const Waline = require('@waline/vercel');
+
+// Patch token controller to add debug logging
+const origToken = require('@waline/vercel/src/controller/token');
+const origPost = origToken.prototype.post;
+origToken.prototype.post = async function() {
+  try {
+    const body = this.post();
+    const email = body.email;
+    const password = body.password;
+    
+    console.log('[DEBUG] Login attempt:', email);
+    
+    const user = await this.modelInstance.select({ email });
+    console.log('[DEBUG] User found:', user.length > 0, user.length > 0 ? { type: user[0].type, email: user[0].email } : 'none');
+    
+    if (user.length > 0) {
+      const { PasswordHash } = require('phpass');
+      const hasher = new PasswordHash();
+      const check = hasher.checkPassword(password, user[0].password);
+      console.log('[DEBUG] Password check:', check);
+    }
+    
+    return origPost.call(this);
+  } catch(e) {
+    console.log('[DEBUG] Error:', e.message);
+    return this.fail(e.message);
+  }
+};
+
 module.exports = Waline();
