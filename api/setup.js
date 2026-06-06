@@ -1,10 +1,10 @@
 const { Client } = require('pg');
 
 module.exports = async (req, res) => {
-  // Accept key from query or body
-  const key = req.body?.secret || req.query?.s;
+  const rawKey = req.query?.s || req.headers['x-auth'] || '';
+  const key = Buffer.from(rawKey, 'base64').toString('utf8');
   if (key !== 'fix-admin-2026') {
-    return res.status(403).json({ error: 'Forbidden', got: typeof key });
+    return res.status(403).json({ error: 'Forbidden', got: key.substring(0,3) });
   }
 
   const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
