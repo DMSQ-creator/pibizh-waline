@@ -1,4 +1,3 @@
-const { Client } = require('pg');
 const { PasswordHash } = require('phpass');
 
 module.exports = async (req, res) => {
@@ -7,55 +6,39 @@ module.exports = async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
-  if (!connectionString) {
-    return res.status(500).json({ error: 'No database connection string' });
-  }
-
-  const client = new Client({ connectionString, ssl: true });
-  
   try {
-    await client.connect();
-
-    // Check all users
-    const { rows: users } = await client.query('SELECT * FROM wl_users');
+    // Use Waline's own infrastructure to do a login test
+    const Waline = require('@waline/vercel');
+    const handler = Waline();
     
-    // Try to simulate exactly what Waline does in token.js
-    // But also try to actually use Waline's built-in method
-    let walineLoginResult = 'not_tested';
+    // Create a mock request to /api/token
+    const mockReq = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'origin': 'https://pibizh.com',
+      },
+      body: JSON.stringify({ email: 'andy@pibizh.com', password: 'pibizh2026' }),
+    };
     
-    try {
-      // Try using the Waline module directly
-      const Waline = require('@waline/vercel');
-      const app = Waline();
-      
-      // Check if we can access the internal model
-      walineLoginResult = 'Waline loaded successfully';
-    } catch(e) {
-      walineLoginResult = 'Error: ' + e.message;
-    }
+    // Try to call the handler directly
+    let responseBody = '';
+    let statusCode = 200;
+    const mockRes = {
+      status: (code) => { statusCode = code; return mockRes; },
+      json: (data) => { responseBody = JSON.stringify(data); return mockRes; },
+      setHeader: () => mockRes,
+      end: (data) => { if (data) responseBody = data; return mockRes; },
+    };
     
-    const results = users.map(u => {
-      const hasher = new PasswordHash();
-      let verify = false;
-      try { verify = hasher.checkPassword('pibizh2026', u.password); } catch(e) { verify = 'ERROR: ' + e.message; }
-      return {
-        id: u.id,
-        email: u.email,
-        type: u.type,
-        display_name: u.display_name,
-        passwordHash: u.password,
-        verifyPibizh2026: verify,
-        isVerifyUser: /^verify:/iu.test(u.type),
-        isBannedUser: u.type === 'banned',
-        createdAt: u.createdat
-      };
+    await handler(mockReq, mockRes);
+    
+    return res.json({ 
+      statusCode,
+      loginResponse: JSON.parse(responseBody || '{}'),
+      directCheck: new PasswordHash().checkPassword('pibizh2026', '$2a$08$sae7U6efQrUnf6YQKFIHZuGLSL8ZoKFMcy8D4MRgCfz9eoO0RHUyG')
     });
-    
-    await client.end();
-    return res.json({ users: results, walineStatus: walineLoginResult });
   } catch (err) {
-    try { await client.end(); } catch(e) {}
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message, stack: err.stack?.substring(0, 500) });
   }
 };
