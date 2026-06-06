@@ -17,7 +17,6 @@ module.exports = async (req, res) => {
   try {
     await client.connect();
 
-    // Get current user and their hash
     const { rows: users } = await client.query('SELECT * FROM wl_users WHERE email = $1', ['andy@pibizh.com']);
     
     if (users.length === 0) {
@@ -26,37 +25,28 @@ module.exports = async (req, res) => {
     }
 
     const user = users[0];
-    const oldHash = user.password;
     
-    // Generate a new hash on this server
+    // Simulate what Waline's token.js does
     const hasher = new PasswordHash();
-    const newHash = hasher.hashPassword('pibizh2026');
+    const checkResult = hasher.checkPassword('pibizh2026', user.password);
     
-    // Verify the NEW hash
-    const hasher2 = new PasswordHash();
-    const verifyNew = hasher2.checkPassword('pibizh2026', newHash);
-    
-    // Verify the OLD hash
-    const hasher3 = new PasswordHash();
-    let verifyOld = false;
-    try {
-      verifyOld = hasher3.checkPassword('pibizh2026', oldHash);
-    } catch(e) {
-      verifyOld = 'ERROR: ' + e.message;
-    }
-    
-    // Update password with fresh hash
-    await client.query('UPDATE wl_users SET password = $1, type = $2 WHERE email = $3', [newHash, 'administrator', 'andy@pibizh.com']);
+    // Also check if the type field is correct
+    const isVerifyUser = /^verify:/iu.test(user.type);
+    const isBannedUser = user.type === 'banned';
 
     await client.end();
 
     return res.status(200).json({
-      oldHash: oldHash,
-      newHash: newHash,
-      verifyOld: verifyOld,
-      verifyNew: verifyNew,
-      userType: user.type,
-      updated: true
+      userId: user.id,
+      email: user.email,
+      type: user.type,
+      displayName: user.display_name,
+      passwordHash: user.password.substring(0, 20) + '...',
+      checkPasswordResult: checkResult,
+      isVerifyUser: isVerifyUser,
+      isBannedUser: isBannedUser,
+      loginWouldSucceed: !isVerifyUser && !isBannedUser && checkResult,
+      allColumns: Object.keys(user)
     });
   } catch (err) {
     try { await client.end(); } catch(e) {}
