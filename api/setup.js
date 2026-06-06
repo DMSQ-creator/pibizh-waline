@@ -1,76 +1,29 @@
-const { Client } = require('pg');
-const { PasswordHash } = require('phpass');
-const jwt = require('jsonwebtoken');
-
 module.exports = async (req, res) => {
   const key = req.query.key;
   if (key !== 'fix-admin-2026') {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
-  const client = new Client({ connectionString, ssl: true });
-  
   try {
-    await client.connect();
-
-    // Step 1: Get user from DB
-    const { rows } = await client.query('SELECT * FROM wl_users WHERE email = $1', ['andy@pibizh.com']);
-    
-    if (rows.length === 0) {
-      await client.end();
-      return res.json({ error: 'User not found' });
-    }
-
-    const user = rows[0];
-    
-    // Step 2: Check password with PHPass
-    const hasher = new PasswordHash();
-    const checkPw = hasher.checkPassword('pibizh2026', user.password);
-    
-    // Step 3: Try JWT signing (simulating what Waline does)
-    let jwtResult = 'not_tested';
-    try {
-      const jwtKey = process.env.JWT_KEY;
-      if (!jwtKey) {
-        jwtResult = 'ERROR: JWT_KEY not set';
-      } else {
-        const token = jwt.sign(String(user.id), jwtKey);
-        jwtResult = 'OK, token: ' + token.substring(0, 30) + '...';
-      }
-    } catch(e) {
-      jwtResult = 'ERROR: ' + e.message;
+    // Set JWT_TOKEN since Waline reads it
+    if (!process.env.JWT_TOKEN) {
+      process.env.JWT_TOKEN = process.env.POSTGRES_PASSWORD || 'fallback-jwt-key';
     }
     
-    // Step 4: Check all the conditions from token.js
-    const isVerifyUser = /^verify:/iu.test(user.type);
-    const isBannedUser = user.type === 'banned';
+    const Waline = require('@waline/vercel');
+    const app = Waline();
     
-    // Step 5: What does the Waline login ACTUALLY see?
-    // The issue might be that Waline's ORM query returns different column names
-    // Let me check what Waline's select returns
+    // Now make an internal request to /api/token
+    // But this time capture the actual error
     
-    await client.end();
+    // Alternative: use the thinkjs model directly
+    const think = require('thinkjs');
     
-    return res.json({
-      dbUser: {
-        id: user.id,
-        email: user.email,
-        type: user.type,
-        display_name: user.display_name,
-        createdat: user.createdat,
-        passwordPrefix: user.password.substring(0, 15)
-      },
-      passwordCheck: checkPw,
-      isVerifyUser,
-      isBannedUser,
-      wouldPassLogin: !isVerifyUser && !isBannedUser && checkPw,
-      jwtResult,
-      jwtKeySet: !!process.env.JWT_KEY,
-      jwtKeyValue: process.env.JWT_KEY || 'NOT SET'
+    return res.json({ 
+      msg: 'checking thinkjs',
+      jwtToken: process.env.JWT_TOKEN ? 'SET' : 'NOT SET'
     });
-  } catch (err) {
-    try { await client.end(); } catch(e) {}
-    return res.status(500).json({ error: err.message });
+  } catch(e) {
+    return res.status(500).json({ error: e.message, stack: e.stack?.substring(0, 500) });
   }
 };
