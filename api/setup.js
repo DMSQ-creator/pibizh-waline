@@ -5,12 +5,15 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Use Waline's own infrastructure
+    // Capture console output
+    const logs = [];
+    const origLog = console.log;
+    const origError = console.error;
+    console.log = (...args) => { logs.push(['LOG', ...args]); origLog(...args); };
+    console.error = (...args) => { logs.push(['ERR', ...args]); origError(...args); };
+    
     const Waline = require('@waline/vercel');
     const app = Waline();
-    
-    // The app is a Next.js-style handler
-    // Let me create a proper mock request and response
     
     const body = Buffer.from(JSON.stringify({ email: 'andy@pibizh.com', password: 'pibizh2026' }));
     
@@ -23,8 +26,6 @@ module.exports = async (req, res) => {
         'origin': 'https://pibizh.com',
         'content-length': String(body.length),
       },
-      body: body,
-      // Node.js IncomingMessage methods
       on: (event, handler) => {
         if (event === 'data') handler(body);
         if (event === 'end') handler();
@@ -48,12 +49,17 @@ module.exports = async (req, res) => {
     
     await app(mockReq, mockRes);
     
+    console.log = origLog;
+    console.error = origError;
+    
     return res.json({
       statusCode: mockRes.statusCode,
       response: responseData.substring(0, 500),
-      headers: mockRes.headers
+      logs: logs.map(l => l.map(x => typeof x === 'string' ? x.substring(0, 200) : String(x).substring(0, 200)))
     });
   } catch(e) {
+    console.log = origLog;
+    console.error = origError;
     return res.status(500).json({ error: e.message, stack: e.stack?.substring(0, 800) });
   }
 };
