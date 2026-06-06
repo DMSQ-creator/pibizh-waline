@@ -1,4 +1,5 @@
 const { Client } = require('pg');
+const { PasswordHash } = require('phpass');
 
 module.exports = async (req, res) => {
   const key = req.query.key;
@@ -6,42 +7,38 @@ module.exports = async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const action = req.query.action || 'info';
   const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
   const client = new Client({ connectionString, ssl: true });
   
   try {
     await client.connect();
 
-    if (action === 'nuke') {
-      // Delete ALL users so we can re-register as first user (→ admin)
-      await client.query('DELETE FROM wl_users');
-      const { rows } = await client.query('SELECT count(*) as cnt FROM wl_users');
-      await client.end();
-      return res.json({ action: 'nuke', remainingUsers: rows[0].cnt });
-    }
-    
-    if (action === 'register') {
-      // Use Waline's own registration endpoint to create the admin user
-      // First delete existing
-      await client.query("DELETE FROM wl_users WHERE email = 'andy@pibizh.com'");
-      await client.end();
-      
-      // Now call Waline's own register API
-      const fetch = (...args) => import('node-fetch').then(m => m.default(...args));
-      const regResp = await fetch('https://pibizh-waline-dmsqcreators-projects.vercel.app/api/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Origin': 'https://pibizh.com' },
-        body: JSON.stringify({ email: 'andy@pibizh.com', password: 'pibizh2026', display_name: 'Andy' })
-      });
-      const regData = await regResp.json();
-      return res.json({ action: 'register', regResult: regData });
-    }
+    // Count users - if 0, first user becomes admin
+    const { rows: countRows } = await client.query('SELECT count(*) as cnt FROM wl_users');
+    const userCount = parseInt(countRows[0].cnt);
 
-    // Info mode
-    const { rows: users } = await client.query('SELECT id, email, type, display_name, createdat FROM wl_users');
+    // Create user with PHPass hash (same as Waline)
+    const hasher = new PasswordHash();
+    const hash = hasher.hashPassword('pibizh2026');
+    
+    const result = await client.query(
+      `INSERT INTO wl_users (email, password, type, display_name, createdat, updatedat) 
+       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
+       RETURNING id, email, type, display_name`,
+      ['andy@pibizh.com', hash, userCount === 0 ? 'administrator' : 'guest', 'Andy']
+    );
+
+    // Verify the password
+    const hasher2 = new PasswordHash();
+    const verify = hasher2.checkPassword('pibizh2026', result.rows[0].password || hash);
+    
     await client.end();
-    return res.json({ action: 'info', users });
+    return res.json({ 
+      success: true, 
+      user: result.rows[0],
+      passwordVerify: verify,
+      wasFirstUser: userCount === 0
+    });
   } catch (err) {
     try { await client.end(); } catch(e) {}
     return res.status(500).json({ error: err.message });
