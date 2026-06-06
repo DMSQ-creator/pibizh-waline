@@ -17,31 +17,46 @@ module.exports = async (req, res) => {
   try {
     await client.connect();
 
-    // First get column names
-    const { rows: cols } = await client.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'wl_users'");
+    // Get current user and their hash
+    const { rows: users } = await client.query('SELECT * FROM wl_users WHERE email = $1', ['andy@pibizh.com']);
     
-    // Get all users
-    const { rows: users } = await client.query('SELECT * FROM wl_users');
+    if (users.length === 0) {
+      await client.end();
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = users[0];
+    const oldHash = user.password;
     
-    // Hash password with PHPass (same as Waline)
+    // Generate a new hash on this server
     const hasher = new PasswordHash();
-    const hashedPassword = hasher.hashPassword('pibizh2026');
+    const newHash = hasher.hashPassword('pibizh2026');
     
-    // Update the user - use * to return all columns
-    const updateResult = await client.query(
-      `UPDATE wl_users SET type = 'administrator', password = $1 WHERE email = 'andy@pibizh.com' RETURNING *`,
-      [hashedPassword]
-    );
+    // Verify the NEW hash
+    const hasher2 = new PasswordHash();
+    const verifyNew = hasher2.checkPassword('pibizh2026', newHash);
+    
+    // Verify the OLD hash
+    const hasher3 = new PasswordHash();
+    let verifyOld = false;
+    try {
+      verifyOld = hasher3.checkPassword('pibizh2026', oldHash);
+    } catch(e) {
+      verifyOld = 'ERROR: ' + e.message;
+    }
+    
+    // Update password with fresh hash
+    await client.query('UPDATE wl_users SET password = $1, type = $2 WHERE email = $3', [newHash, 'administrator', 'andy@pibizh.com']);
 
     await client.end();
 
     return res.status(200).json({
-      columns: cols.map(c => c.column_name),
-      allUsers: users.map(u => Object.fromEntries(Object.entries(u).map(([k,v]) => [k, k === 'password' ? '***HASHED***' : v]))),
-      updatedCount: updateResult.rowCount,
-      updatedEmail: updateResult.rows[0]?.email || null,
-      updatedType: updateResult.rows[0]?.type || null,
-      passwordReset: updateResult.rowCount > 0
+      oldHash: oldHash,
+      newHash: newHash,
+      verifyOld: verifyOld,
+      verifyNew: verifyNew,
+      userType: user.type,
+      updated: true
     });
   } catch (err) {
     try { await client.end(); } catch(e) {}
