@@ -16,7 +16,12 @@ if (connectionString) {
 
 // Auto-generate JWT_KEY if not set
 if (!process.env.JWT_KEY) {
-  process.env.JWT_KEY = 'pibizh-waline-jwt-2026-secure-key-x8k9m2n4p7q1';
+  process.env.JWT_KEY = process.env.POSTGRES_PASSWORD || 'default-jwt-key-' + Date.now();
+}
+
+// Fix SECURE_DOMAINS: add the Vercel domain so admin login works
+if (process.env.SECURE_DOMAINS && !process.env.SECURE_DOMAINS.includes('vercel.app')) {
+  process.env.SECURE_DOMAINS = process.env.SECURE_DOMAINS + ',pibizh-waline.vercel.app,pibizh-waline-dmsqcreators-projects.vercel.app';
 }
 
 const Waline = require('@waline/vercel');
