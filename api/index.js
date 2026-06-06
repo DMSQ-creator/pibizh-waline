@@ -14,5 +14,10 @@ if (connectionString) {
   }
 }
 
+// Auto-generate JWT_KEY if not set
+if (!process.env.JWT_KEY) {
+  process.env.JWT_KEY = 'pibizh-waline-jwt-2026-secure-key-x8k9m2n4p7q1';
+}
+
 const Waline = require('@waline/vercel');
 module.exports = Waline();
