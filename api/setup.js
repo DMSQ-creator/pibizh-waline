@@ -1,7 +1,6 @@
 const { Client } = require('pg');
 
 module.exports = async (req, res) => {
-  // Only allow GET with a secret key
   const key = req.query.key;
   if (key !== 'fix-admin-2026') {
     return res.status(403).json({ error: 'Forbidden' });
@@ -17,27 +16,39 @@ module.exports = async (req, res) => {
   try {
     await client.connect();
 
-    // Check current users
-    const { rows: users } = await client.query('SELECT "objectId", email, type, "display_name" FROM "Users"');
+    // List all tables
+    const { rows: tables } = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
     
-    // Fix the admin user - set type to 'administrator' and reset password
-    // Waline uses phpass for password hashing
-    const PHPass = require('phpass');
-    const hasher = new PHPass();
-    const hashedPassword = hasher.hashPassword('pibizh2026');
+    let result = { tables: tables.map(t => t.tablename), users: [], updated: null };
     
-    const result = await client.query(
-      `UPDATE "Users" SET type = 'administrator', password = $1 WHERE email = 'andy@pibizh.com' RETURNING "objectId", email, type, "display_name"`,
-      [hashedPassword]
-    );
+    // Try each possible user table name
+    for (const table of ['Users', 'users', 'user', 'waline_users']) {
+      try {
+        const { rows } = await client.query(`SELECT * FROM "${table}" LIMIT 10`);
+        result.users = rows;
+        result.userTable = table;
+        
+        if (rows.length > 0) {
+          // Fix admin user
+          const PHPass = require('phpass');
+          const hasher = new PHPass();
+          const hashedPassword = hasher.hashPassword('pibizh2026');
+          
+          const updateResult = await client.query(
+            `UPDATE "${table}" SET type = 'administrator', password = $1 WHERE email = 'andy@pibizh.com' RETURNING "objectId", email, type, "display_name"`,
+            [hashedPassword]
+          );
+          result.updated = updateResult.rows;
+          result.passwordReset = updateResult.rowCount > 0;
+        }
+        break;
+      } catch(e) {
+        // Table doesn't exist, try next
+      }
+    }
 
     await client.end();
-
-    return res.status(200).json({
-      allUsers: users.map(u => ({ id: u.objectId, email: u.email, type: u.type, name: u.display_name })),
-      updated: result.rows,
-      passwordReset: result.rowCount > 0
-    });
+    return res.status(200).json(result);
   } catch (err) {
     try { await client.end(); } catch(e) {}
     return res.status(500).json({ error: err.message });
